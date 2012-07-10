@@ -1,0 +1,121 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0px;
+        padding: 0px;
+      }
+      canvas {
+        border: 1px solid #9C9898;
+      }
+      #container {
+      	margin-left: 250px;
+      	margin-top: 50px;
+      }     
+    </style>
+    <script src="http://www.html5canvastutorials.com/libraries/kinetic-v3.9.7.js"></script>
+    <script>
+      window.onload = function() {
+        var stage = new Kinetic.Stage({
+          container: "container",
+          width: 758,
+          height: 600
+        });
+        
+        var nodeLayer = new Kinetic.Layer();
+        var edgeLayer = new Kinetic.Layer();
+        var colors = ["red", "orange", "yellow", "green", "blue", "cyan", "purple"];
+        var colorIndex = 0;
+        var xCoord = 40;
+        var yCoord = 40;
+
+        for(var n = 0; n < 10; n++) {( function() {
+            var i = n;
+            var color = colors[colorIndex++];
+            if(colorIndex >= colors.length) {
+              colorIndex = 0;
+            }
+
+			if(n < 7 ) {
+				var randRadius = 20;
+			}
+			else {
+	            var randRadius = 10;	
+			}
+
+            var node = new Kinetic.Circle({
+              x: xCoord,
+              y: yCoord,
+              radius: randRadius,
+              draggable: true,
+              fill: color,
+              stroke: "#666",
+              strokeWidth: 2,
+            });
+            
+            node.on("mouseover", function() {
+          	document.body.style.cursor = "pointer";
+          	this.setStrokeWidth(4);
+          	nodeLayer.draw();
+        	});
+        	
+        	node.on("mouseout", function() {
+          	document.body.style.cursor = "default";
+          	this.setStrokeWidth(2);
+          	nodeLayer.draw();
+        	});
+
+            nodeLayer.add(node);
+            if(n < 7) {
+            	if(n == 0){
+            		xCoord = 200;
+            		yCoord = 50;
+            	}
+            	if(n == 1){
+            		xCoord = 125;
+            		yCoord = 150;
+            	}
+            	if(n == 2){
+            		
+            	}
+            	if(n == 3){
+            		
+            	}
+            	if(n == 4){
+            		
+            	}
+            	if(n == 5){
+            		
+            	}
+            	if(n == 6){
+            		
+            	}            	
+            }
+            else {
+            	
+            }
+          }());
+        }
+        stage.add(nodeLayer);
+        
+        var nodes = nodeLayer.getChildren();
+        for(var j=0; j < nodes.length-1; j++) {( function() {
+        	// var color = colors[colorIndex++];
+        	var context = nodeLayer.getContext();
+        	context.beginPath();
+        	context.moveTo(nodes[j].attrs.x, nodes[j].attrs.y);
+        	context.lineTo(nodes[j+1].attrs.x-20, nodes[j+1].attrs.y);
+        	context.strokeStyle = "red";
+        	context.lineWidth = 4;
+        	context.stroke();
+        }());
+        }
+      };
+
+    </script>
+  </head>
+  <body onmousedown="return false;">
+    <div id="container"></div>
+  </body>
+</html>

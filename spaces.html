@@ -1,0 +1,388 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+  	<link href='http://fonts.googleapis.com/css?family=Shadows+Into+Light' rel='stylesheet' type='text/css'>
+    <style>
+    font-family: 'Shadows Into Light', cursive;
+      body {
+        margin: 0px;
+        padding: 0px;
+      }
+      canvas {
+        border: 1px solid #9C9898;
+      }
+      #container {
+      	margin-left: 250px;
+      	margin-top: 50px;
+      }
+      .kineticjs-content {
+      	background: -webkit-radial-gradient(circle, #fff, #d1d1d1);
+      }
+    </style>
+    <script src="kinect.js"></script>
+    <script>
+    	var nodes = new Array();
+    	var edges = new Array();
+    	var connections = new Array();
+    	var spaceNodes = new Array();
+    	var chosenNodes = [];   
+    	var chosenSpace = 0; 	
+    	
+    	function Connection(node1, node2, strength) {
+    		this.start = node1,
+    		this.end = node2,
+    		this.strength = strength	
+    	}
+    	
+    	function NodeSpace(node, space) {
+    		this.node = node,
+    		this.space = space
+    	}
+		
+		function buildButton(layer, x, y, text, button) {
+			var button = new Kinetic.Text ({
+	        	x: x,
+	        	y: y,        	
+	        	padding: 15,
+	        	fill: '#f1f1f1',
+	        	fontSize: 16,
+	        	fontFamily: 'Calibri',
+	        	textFill: '#6c7383',
+	        	stroke: '#9c9898',
+	        	text: text,
+	        	strokeWidth: 1,
+	        	draggable: false,
+	        	alpha: 0.3
+	        });              
+	        
+	        button.on("mouseover", function() {
+	        	this.setAlpha(1);
+	        	document.body.style.cursor = "pointer";
+	        	this.setFill('#fff');
+	        	layer.draw();
+	        });
+	        
+	        button.on("mouseout", function() {
+	        	this.setAlpha(0.3);
+	        	document.body.style.cursor = "default";
+	        	this.setFill('#f1f1f1');
+	        	layer.draw();
+	        });
+	        layer.add(button)	        
+	        return button;
+		};
+		    	
+      function buildAnchor(layer, x, y, width, height, name, color, anchor) {
+        var anchor = new Kinetic.Rect({
+          x: x,
+          y: y,
+          width: width,
+          height: height,
+          stroke: "#000",
+          id: name,
+          fill: color,
+          strokeWidth: 1,
+          draggable: true
+        });                              
+        
+        var tooltip = layer.get('#tooltip')[0];
+                
+        anchor.on("mouseover", function() {
+          document.body.style.cursor = "pointer";
+          this.setStrokeWidth(2);
+          this.setScale(1.1);
+          this.setShadow({
+      	  	color: 'black',
+      	  	blur: 3,
+      	  	offset: [5, 3],
+      	  	alpha: 0.5});
+      	  tooltip.moveToTop();
+          tooltip.setPosition([anchor.attrs.x, anchor.attrs.y-30]);
+          tooltip.setText(anchor.attrs.id);
+          tooltip.setAlpha(1);          
+          layer.draw();
+        });
+        
+        anchor.on("mouseout", function() {
+          document.body.style.cursor = "default";
+          this.setStrokeWidth(1);
+          this.setScale(1);        
+          tooltip.setAlpha(0);
+          this.setShadow({alpha: 0});
+          layer.draw();
+        });
+        
+        anchor.on("dragstart", function() {        	
+        	tooltip.setAlpha(0);
+        });
+        
+        anchor.on("dragend", function() {
+        	tooltip.setPosition([anchor.attrs.x, anchor.attrs.y-30]);
+        	tooltip.setAlpha(1);         	       
+        	layer.draw();
+        });
+        
+        anchor.on('mouseup', function () {
+        	if(event.which == 1) {
+        		if(chosenNodes[0] == this) {
+        			chosenNodes.shift();        		
+        			this.setStroke('#000');
+        		}        	       	    
+        		else if(chosenNodes[1] == this) {
+        			chosenNodes.pop();
+        			this.setStroke('#000');
+        		}
+        		else {            
+	        		if(chosenNodes.length == 2) {        		        	
+	        			chosenNodes[1].setStroke('#000');
+	        			chosenNodes.pop();        		
+	        			chosenNodes[1] = chosenNodes[0];
+	        			chosenNodes[0] = this;
+	        			this.setStroke('yellow');
+	        		}
+	        		else {
+	        			chosenNodes.unshift(this);
+	        			this.setStroke('yellow');
+	        		}
+    			}	
+        	}
+        	else if(event.which == 3) {
+        		// change space
+        	}
+        	        	
+        	layer.draw();
+        });        
+
+        layer.add(anchor);
+        return anchor;
+      }
+      function buildEdge(layer, start, end, dash, alpha, edge) {
+    		var edge = new Kinetic.Line({
+    			points: [start.attrs.x+start.attrs.width/2, start.attrs.y+start.attrs.height/2, end.attrs.x+end.attrs.width/2, end.attrs.y+end.attrs.height/2],
+    			stroke: '#000',
+    			strokeWidth: 1,
+    			alpha: alpha
+    		});	
+    		layer.add(edge);
+    		edge.moveToBottom();
+    		if(dash) edge.setDashArray([10, 2]);
+    		return edge;
+    	}
+    	
+      function drawEdges() {
+        var layer = this.getLayer();
+		if(connections.length > 0) {
+			for(var i=0; i < edges.length; i++) {
+				var start = connections[i].start;
+				var end = connections[i].end;			
+				edges[i].setPoints([start.attrs.x+start.attrs.width/2, start.attrs.y+start.attrs.height/2, end.attrs.x+end.attrs.width/2, end.attrs.y+end.attrs.height/2]);
+			}		
+		}	
+      	layer.draw();
+      }
+
+      window.onload = function() {
+      	
+        var stage = new Kinetic.Stage({
+          container: "container",
+          width: 950,
+          height: 650,
+        });   
+        
+        var noteTypes = ['math', 'physics', 'theory'];
+        var noteColors = ['green', 'yellow', 'blue'];
+        var noteType = 0;   
+        
+        var edgeTypes = ['strong', 'weak'];
+        var edgeType = 0;
+        
+        var spaceTypes = ['hard subjects', 'Friends', 'Needs revision'];
+        var spaceType = 0; 
+        
+        var layer = new Kinetic.Layer({
+          drawFunc: drawEdges
+        });
+        
+        var topLayer = new Kinetic.Layer({
+        	
+        });
+                
+        var imgObj = new Image();
+        imgObj.onload = function () {
+	        var logo = new Kinetic.Image({
+	        	x: 40,
+	        	y: 20,
+	        	image: imgObj
+	        });
+        topLayer.add(logo);
+        topLayer.draw();
+        }
+        
+        imgObj.src = 'logo2.png';   
+        
+		var infoBox = new Kinetic.Text({
+		  x: 40,
+		  y: 40,
+		  width: 205,
+		  height: 50,			          
+		  fill: '#ccc',
+		  fontSize: 12,
+		  id: 'tooltip',
+		  fontFamily: "Calibri",
+		  textFill: "#000",
+		  padding: 5,
+		  stoke: '#000',
+		  strokeWidth: 1,
+		  alpha: 0	
+		});
+        
+        var newNode = buildButton(topLayer, 40, 100, 'New Note');
+        
+        newNode.on("mouseup", function(event) {
+        	if(event.which == 1)
+        	{        		
+	        	nodes.push(buildAnchor(layer, Math.random()*900, Math.random()*600, 40, 40, noteTypes[noteType], noteColors[noteType]));
+	        	// if(spaceType > 2) spaceType = 0;
+	        	spaceNodes.push(new NodeSpace(nodes[nodes.length-1], spaceTypes[0]));//Math.floor(Math.random()*spaceType+1)]));
+	        	// spaceType++;        	
+	        	if(nodes.length > 2) {	        		
+	        		var end = Math.floor(Math.random()*nodes.length-1);	
+	        		var randomNumber = Math.floor(Math.random()*10);	        			        		       
+	        		if(end >= 1 && randomNumber >= 4) {
+	        			edges.push(buildEdge(layer, nodes[nodes.length-1], nodes[end], true, 0.5));	     
+	        			connections.push(new Connection(nodes[nodes.length-1], nodes[end], 1));
+	        			}   		
+	        	}
+	        	layer.draw();        		
+        	}
+        	else if (event.which == 3)
+        	{        		
+        		if(noteType == 2) noteType = 0;
+        		else noteType++;
+        		infoBox.setText('Note type changed to ' +noteTypes[noteType]);
+        		infoBox.moveToTop();
+        		infoBox.transitionTo({
+        			x: 200,
+        			y: 120,
+        			duration: 1,
+        			alpha: 1
+        		});
+        	}        	
+        });	  
+        
+        newNode.on('mouseout', function() {
+        	infoBox.transitionTo({
+        		x: 40,
+        		y: 40,
+        		duration: 1,
+        		alpha: 0
+        	});
+        });              
+        
+        var newEdge = buildButton(topLayer, 40, 160, 'New Relation');
+        
+        var space = buildButton(topLayer, 40, 220, 'Space');
+        
+        space.on('mouseup', function() {
+        	if(event.which == 1) {
+        		// organize into spaces.
+        		var beacon = null;
+        		
+        		for(var i=0; i < spaceNodes.length; i++) {
+        			if(!beacon) {        				
+        				if(spaceNodes[i].space == spaceTypes[spaceType]) {
+        					beacon = spaceNodes[i].node;
+        				}
+        			}
+        			else {
+        				if(spaceNodes[i].space == spaceTypes[spaceType]) {
+        					spaceNodes[i].node.attrs.x = beacon.attrs.x + Math.random()*250;
+        					spaceNodes[i].node.attrs.y = beacon.attrs.y + Math.random()*250;
+        				}
+        			}	
+        		}
+        		  		
+        	}
+        	else if (event.which == 3) {
+        		// change space        		
+        	}
+        });
+       
+        newEdge.on("mouseup", function() {
+        	if (event.which == 1 && chosenNodes.length > 1)
+        	{
+        		for(var i=0; i < connections.length; i++){
+        			if(chosenNodes[0] == connections[i].start && chosenNodes[1] == connections[i].end ||
+        				chosenNodes[1] == connections[i].start && chosenNodes[0] == connections[i].end)
+        				{
+        				return;
+        				}
+        		}
+        			
+        		var alpha;
+        		connections.push(new Connection(chosenNodes[0], chosenNodes[1], edgeType));
+        		if(edgeType == 0) alpha = 1;
+        		else alpha = 0.3;
+        		edges.push(buildEdge(layer, chosenNodes[0], chosenNodes[1], false, alpha)); 
+        		chosenNodes[0].setStroke('#000');
+        		chosenNodes[1].setStroke('#000');        			
+        		chosenNodes = [];
+        		layer.draw();        		
+        	}
+        	else if (event.which == 3)
+        	{            	
+        		if(edgeType == 1) edgeType = 0;
+        		else edgeType++;
+        		infoBox.setText('Edge type changed to ' +edgeTypes[edgeType]);
+        		infoBox.moveToTop();        		    		
+        		infoBox.transitionTo({
+        			x: 200,
+        			y: 180,
+        			duration: 1.5,
+        			alpha: 1
+        		});
+        	} 	    		    		    	
+        });	                     
+        
+		var tooltip = new Kinetic.Text({
+	          x: 40,
+	          y: 40,
+	          width: 75,
+	          height: 50,			          
+	          fill: '#ccc',
+	          fontSize: 12,
+	          id: 'tooltip',
+	          fontFamily: "Calibri",
+	          textFill: "#000",
+	          padding: 5,
+	          stoke: '#000',
+	          strokeWidth: 1,
+	          alpha: 0			          			         
+		});
+		
+        newEdge.on('mouseout', function() {
+        	infoBox.transitionTo({
+        		x: 40,
+        		y: 40,
+        		duration: 1,
+        		alpha: 0
+        	});
+        }); 		
+        
+        layer.add(infoBox);
+        layer.add(tooltip);      
+        
+        stage.on("mouseout", function() {
+          layer.draw();
+        });
+
+        stage.add(layer);
+        stage.add(topLayer);
+      };
+
+    </script>
+  </head>
+  <body onmousedown="return false;" oncontextmenu="return false;">
+    <div id="container"></div>    
+  </body>
+</html>
